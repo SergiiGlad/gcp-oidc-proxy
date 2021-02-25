@@ -83,7 +83,7 @@ def handle_request(proxied_request):
         return 'Requested path {} not in whitelist'.format(path), 403
 
     global _oidc_token
-    if not _oidc_token or _oidc_token.is_expired():
+    if not _oidc_token :
         _oidc_token = id_token.fetch_id_token(GRequest(), os.getenv('CLIENT_ID'))
         logging.info('Renewed OIDC bearer token for {}'.format(
             _adc_credentials.service_account_email))
