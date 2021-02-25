@@ -2,6 +2,7 @@ from functools import wraps
 import logging
 import os
 import time
+from google.oauth2 import id_token
 
 from flask import request
 import google.auth
@@ -54,20 +55,7 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-
-class OIDCToken(object):
-
-    def __init__(self, token_str):
-        self._token_str = token_str
-        self._claims = jwt.decode(token_str, verify=False)
-
-    def __str__(self):
-        return self._token_str
-
-    def is_expired(self):
-        return int(time.time()) >= self._claims['exp']
-
-
+ 
 @requires_auth
 def handle_request(proxied_request):
     """Proxy the given request to the URL in the Forward-Host header with an
@@ -96,7 +84,7 @@ def handle_request(proxied_request):
 
     global _oidc_token
     if not _oidc_token or _oidc_token.is_expired():
-        _oidc_token = _get_google_oidc_token()
+        _oidc_token = id_token.fetch_id_token(GRequest(), os.getenv('CLIENT_ID'))
         logging.info('Renewed OIDC bearer token for {}'.format(
             _adc_credentials.service_account_email))
 
@@ -119,44 +107,6 @@ def handle_request(proxied_request):
     headers.pop('Content-Encoding', None)
 
     return resp.content, resp.status_code, headers.items()
-
-
-def _get_google_oidc_token():
-    """Get an OpenID Connect token issued by Google for the environment's
-    service account.
-
-    This function:
-      1. Generates a JWT signed with the service account's private key
-         containing a special "target_audience" claim.
-
-      2. Sends it to the OAUTH_TOKEN_URI endpoint. Because the JWT in #1
-         has a target_audience claim, that endpoint will respond with
-         an OpenID Connect token for the service account -- in other words,
-         a JWT signed by *Google*. The aud claim in this JWT will be
-         set to the value from the target_audience claim in #1.
-
-    For more information, see
-    https://developers.google.com/identity/protocols/OAuth2ServiceAccount .
-    The HTTP/REST example on that page describes the JWT structure and
-    demonstrates how to call the token endpoint. (The example on that page
-    shows how to get an OAuth2 access token; this code is using a
-    modified version of it to get an OpenID Connect token.)
-    """
-
-    credentials = Credentials(
-        _signer, _adc_credentials.service_account_email,
-        token_uri=OAUTH_TOKEN_URI,
-        additional_claims={'target_audience': os.getenv('CLIENT_ID')}
-    )
-    service_account_jwt = credentials._make_authorization_grant_assertion()
-    request = GRequest()
-    body = {
-        'assertion': service_account_jwt,
-        'grant_type': google.oauth2._client._JWT_GRANT_TYPE,
-    }
-    token_response = google.oauth2._client._token_endpoint_request(
-        request, OAUTH_TOKEN_URI, body)
-    return OIDCToken(token_response['id_token'])
 
 
 _hoppish = {
