@@ -82,11 +82,10 @@ def handle_request(proxied_request):
             proxied_request.method, url))
         return 'Requested path {} not in whitelist'.format(path), 403
 
-    global _oidc_token
-    if not _oidc_token :
-        _oidc_token = id_token.fetch_id_token(GRequest(), os.getenv('CLIENT_ID'))
-        logging.info('Renewed OIDC bearer token for {}'.format(
-            _adc_credentials.service_account_email))
+    # global _oidc_token
+    # if not _oidc_token :
+    _oidc_token = id_token.fetch_id_token(GRequest(), os.getenv('CLIENT_ID'))
+    logging.info('Renewed OIDC bearer token for {}'.format(_adc_credentials.service_account_email))
 
     # Add the Authorization header with the OIDC token.
     headers['Authorization'] = 'Bearer {}'.format(_oidc_token)
